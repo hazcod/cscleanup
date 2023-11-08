@@ -68,7 +68,7 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 		alreadyHasTag := false
 
 		for _, tag := range host.Tags {
-			if strings.Contains(tag, "email/") {
+			if strings.Contains(strings.ToLower(tag), "email/") {
 				alreadyHasTag = true
 				break
 			}
