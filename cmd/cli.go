@@ -10,6 +10,7 @@ import (
 	"github.com/hazcod/cscleanup/pkg/falcon"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"time"
 )
 
 func main() {
@@ -64,6 +65,17 @@ func main() {
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
+	overviewText += "\n> Inactive hosts:\n"
+	minAliveDate := time.Now().Add(time.Hour * 24 * 60) // two months
+	for _, host := range untaggedClients {
+		if host.LastSeen.After(minAliveDate) {
+			continue
+		}
+
+		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
+			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
+	}
+
 	overviewText += "\n> RFM/broken hosts:\n"
 	for _, host := range rfmClients {
 		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)",
@@ -83,6 +95,8 @@ func main() {
 			logger.WithError(err).Fatal("could not delete clients")
 		}
 	}
+
+	logger.Info(overviewText)
 
 	// ---
 
