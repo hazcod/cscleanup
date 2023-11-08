@@ -1,0 +1,8 @@
+/*.yml
+/*.yaml
+**/.DS_Store
+**/.idea/
+dist/
+.generated-go-semantic-release-changelog.md
+.semrel/
+/*.env
