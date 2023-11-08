@@ -1,0 +1,54 @@
+project_name: cscleanup
+
+before:
+  hooks:
+    - go mod download
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore'
+
+release:
+  disable: false
+
+dockers:
+-
+  image_templates:
+    - "ghcr.io/hazcod/cscleanup/cscleanup:{{ .Tag }}"
+    - "ghcr.io/hazcod/cscleanup/cscleanup:v{{ .Major }}"
+    - "ghcr.io/hazcod/cscleanup/cscleanup:latest"
+
+
+sboms:
+  -
+    artifacts: archive
+
+builds:
+  -
+    id: cscleanup
+    dir: ./cmd/
+    env: [CGO_ENABLED=0]
+    ldflags: [-w -s -extldflags "-static"]
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    binary: cscleanup
+
+archives:
+  -
+    format: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
