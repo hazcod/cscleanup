@@ -66,7 +66,7 @@ func main() {
 	}
 
 	overviewText += "\n> Inactive hosts:\n"
-	minAliveDate := time.Now().Add(time.Hour * 24 * 60) // two months
+	minAliveDate := time.Now().Add(-1 * time.Hour * 24 * 60) // two months
 	for _, host := range untaggedClients {
 		if host.LastSeen.After(minAliveDate) {
 			continue
