@@ -80,6 +80,17 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 		}
 
 		if !alreadyHasTag {
+			// don't log untagged cloud hosts
+			if host.ServiceProvider != "" {
+				continue
+			}
+
+			// skip hosts without a hostname (probably a host not yet fully deployed)
+			if host.Hostname == "" {
+				c.logger.WithField("id", *host.DeviceID).Warn("no hostname for host")
+				continue
+			}
+
 			untagged = append(untagged, Host{
 				ID:              *host.DeviceID,
 				Hostname:        host.Hostname,
@@ -104,7 +115,7 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 		}
 
 		// --
-		checkDate := time.Now().Add(-time.Hour * 24 * 5)
+		checkDate := time.Now().Add(-time.Hour * 24)
 		if host.ServiceProvider != "" && hostLastSeen.Before(checkDate) {
 			c.logger.WithField("id", *host.DeviceID).Debug("can delete cloud host")
 
