@@ -78,7 +78,7 @@ func main() {
 
 	overviewText += "\n> RFM/broken hosts:\n"
 	for _, host := range rfmClients {
-		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)",
+		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
