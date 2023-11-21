@@ -103,7 +103,7 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 
 		// --
 
-		if host.ReducedFunctionalityMode != "no" {
+		if host.ReducedFunctionalityMode != "no" && host.ReducedFunctionalityMode != "Unknown" {
 			rfm = append(rfm, Host{
 				ID:              *host.DeviceID,
 				Hostname:        host.Hostname,
@@ -115,7 +115,7 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 		}
 
 		// --
-		checkDate := time.Now().Add(-time.Hour * 24)
+		checkDate := time.Now().Add(-time.Hour * 24 /**/)
 		if host.ServiceProvider != "" && hostLastSeen.Before(checkDate) {
 			c.logger.WithField("id", *host.DeviceID).Debug("can delete cloud host")
 
