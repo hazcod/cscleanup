@@ -103,7 +103,7 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 
 		// --
 
-		if host.ReducedFunctionalityMode != "no" && host.ReducedFunctionalityMode != "Unknown" {
+		if strings.EqualFold(host.ReducedFunctionalityMode, "yes") {
 			rfm = append(rfm, Host{
 				ID:              *host.DeviceID,
 				Hostname:        host.Hostname,
