@@ -110,7 +110,7 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("failed to marshal slack message")
 	}
-	logrus.Fatal()
+
 	body := bytes.NewReader(data)
 	resp, err := http.Post(conf.Slack.WebhookURL, "application/json", body)
 	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
