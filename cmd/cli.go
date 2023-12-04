@@ -86,12 +86,12 @@ func main() {
 	var deleteHostIDs []string
 	for _, host := range toDeleteHosts {
 		deleteHostIDs = append(deleteHostIDs, host.ID)
-		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)",
+		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
 	if len(deleteHostIDs) > 0 {
-		if err := crowdstrike.DeleteClients(deleteHostIDs); err != nil {
+		if err := crowdstrike.HideClients(deleteHostIDs); err != nil {
 			logger.WithError(err).Fatal("could not delete clients")
 		}
 	}
@@ -110,7 +110,7 @@ func main() {
 	if err != nil {
 		logger.WithError(err).Fatal("failed to marshal slack message")
 	}
-
+	logrus.Fatal()
 	body := bytes.NewReader(data)
 	resp, err := http.Post(conf.Slack.WebhookURL, "application/json", body)
 	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
