@@ -10,6 +10,7 @@ import (
 	"github.com/hazcod/cscleanup/pkg/falcon"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -66,10 +67,14 @@ func main() {
 	}
 
 	overviewText += "\n> Inactive hosts:\n"
-	minAliveDate := time.Now().Add(-1 * time.Hour * 24 * 60) // two months
+	minAliveDate := time.Now().Add(-1 * time.Hour * 24 * 30)
 	for _, host := range untaggedClients {
 		if host.LastSeen.After(minAliveDate) {
 			continue
+		}
+
+		if strings.Contains(strings.ToLower(host.OperatingSystem), "linux") {
+			logger.Warn(host.Hostname)
 		}
 
 		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
@@ -91,6 +96,8 @@ func main() {
 	}
 
 	if len(deleteHostIDs) > 0 {
+		logger.WithField("total", len(deleteHostIDs)).Info("hiding crowdstrike hosts")
+
 		if err := crowdstrike.HideClients(deleteHostIDs); err != nil {
 			logger.WithError(err).Fatal("could not delete clients")
 		}

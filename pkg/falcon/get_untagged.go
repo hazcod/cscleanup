@@ -85,6 +85,19 @@ func (c *CS) GetUntaggedClients() (untagged []Host, rfm []Host, toDelete []Host,
 			if host.Hostname == "" {
 				c.logger.WithField("id", *host.DeviceID).Warn("no hostname for host")
 				host.Hostname = *host.DeviceID
+
+				checkDate := time.Now().Add(-time.Hour * 2)
+				if host.FirstSeen == host.LastSeen && hostLastSeen.Before(checkDate) {
+					c.logger.WithField("host_id", *host.DeviceID).Warn("deleting empty temporary host")
+					toDelete = append(toDelete, Host{
+						ID:              *host.DeviceID,
+						Hostname:        host.Hostname,
+						OperatingSystem: host.OsProductName,
+						LastSeen:        hostLastSeen,
+						Tags:            host.Tags,
+						ServiceProvider: host.ServiceProvider,
+					})
+				}
 			}
 
 			untagged = append(untagged, Host{
