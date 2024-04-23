@@ -7,11 +7,15 @@ on:
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
+
     outputs:
       hashes: ${{ steps.hashes.outputs.hashes }}
+      version: ${{ steps.semrel.outputs.version }}
+
     permissions:
       contents: write
       packages: write
+
     steps:
       -
         name: Checkout
@@ -22,7 +26,7 @@ jobs:
         id: vars
         run: |
           goVersion=$(grep '^FROM go' .github/go/Dockerfile | cut -d ' ' -f 2 | cut -d ':' -f 2)
-          echo "go_version=${goVersion}" >> "$GITHUB_OUTPUT"
+          echo ::set-output name=go_version::${goVersion}
           echo "Using Go version ${goVersion}"
       -
         name: Set up Go
@@ -56,15 +60,16 @@ jobs:
         run: git fetch -a
         if: steps.semrel.outputs.version != ''
       -
-        uses: docker/login-action@v1
+        name: Login to GitHub Docker registry
+        if: steps.semrel.outputs.version != ''
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       -
         name: Release
-        uses: goreleaser/goreleaser-action@v4.4.0
-        id: goreleaser
+        uses: goreleaser/goreleaser-action@v5.0.0
         if: steps.semrel.outputs.version != ''
         with:
           version: latest
@@ -79,7 +84,7 @@ jobs:
           ARTIFACTS: "${{ steps.goreleaser.outputs.artifacts }}"
         run: |
           checksum_file=$(echo "$ARTIFACTS" | jq -r '.[] | select (.type=="Checksum") | .path')
-          echo "hashes=$(cat $checksum_file | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "::set-output name=hashes::$(cat $checksum_file | base64 -w0)"
 
   provenance:
     needs: [goreleaser]
@@ -88,7 +93,6 @@ jobs:
       actions: read # To read the workflow path.
       id-token: write # To sign the provenance.
       contents: write # To add assets to a release.
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.9.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.10.0
     with:
       base64-subjects: "${{ needs.goreleaser.outputs.hashes }}"
-      upload-assets: true
