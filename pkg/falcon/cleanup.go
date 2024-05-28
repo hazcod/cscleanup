@@ -1,6 +1,7 @@
 package falcon
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/crowdstrike/gofalcon/falcon/client/hosts"
 	"github.com/crowdstrike/gofalcon/falcon/models"
@@ -116,6 +117,10 @@ func isRFM(device *models.DeviceapiDeviceSwagger) bool {
 	return strings.EqualFold(device.ReducedFunctionalityMode, "yes")
 }
 
+func isHostHidden(device *models.DeviceapiDeviceSwagger) bool {
+	return device.HostHiddenStatus != "visible"
+}
+
 func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err error) {
 
 	allHostDetails, err := c.getAllHostDetails()
@@ -125,6 +130,11 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 
 	for _, host := range allHostDetails {
 		alreadyHasTag := hasTag(host)
+
+		if isHostHidden(host) && host.Hostname != "" {
+			b, _ := json.Marshal(host)
+			c.logger.Fatal(string(b))
+		}
 
 		hostLastSeen, err := time.Parse("2006-01-02T15:04:05Z", host.LastSeen)
 		if err != nil {
@@ -167,7 +177,9 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 		}
 
 		// check for any sensor in RFM mode
-		if isRFM(host) {
+		checkDate := time.Now().Add(-time.Hour * 24)
+		if isRFM(host) && isCloudHost(host) && hostLastSeen.Before(checkDate) {
+
 			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
 				WithField("id", *host.DeviceID).
 				WithField("hostname", host.Hostname).
@@ -184,7 +196,6 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 		}
 
 		//  check for cloud hosts which were offline for some while
-		checkDate := time.Now().Add(-time.Hour * 24)
 		if isCloudHost(host) && hostLastSeen.Before(checkDate) {
 
 			c.logger.WithField("id", *host.DeviceID).WithField("last_seen", hostLastSeen.Format(time.DateTime)).
