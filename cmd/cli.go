@@ -45,7 +45,7 @@ func main() {
 		logger.WithError(err).Fatal("failed to load crowdstrike module")
 	}
 
-	untaggedClients, rfmClients, toDeleteHosts, err := crowdstrike.CleanupClients()
+	untaggedClients, rfmClients, wronglyHidden, toDeleteHosts, err := crowdstrike.CleanupClients()
 	if err != nil {
 		logger.WithError(err).Fatal("could not fetch untagged clients")
 	}
@@ -62,6 +62,13 @@ func main() {
 			continue
 		}
 
+		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
+			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
+	}
+
+	//  wronglyHidden
+	overviewText += "\n> Hidden active hosts:\n"
+	for _, host := range wronglyHidden {
 		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}

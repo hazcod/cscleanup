@@ -121,11 +121,11 @@ func isHostHidden(device *models.DeviceapiDeviceSwagger) bool {
 	return device.HostHiddenStatus != "visible"
 }
 
-func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err error) {
+func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, err error) {
 
 	allHostDetails, err := c.getAllHostDetails()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	for _, host := range allHostDetails {
@@ -138,12 +138,12 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 
 		hostLastSeen, err := time.Parse("2006-01-02T15:04:05Z", host.LastSeen)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("could not parse last seen time: %v", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not parse last seen time: %v", err)
 		}
 
 		hostFirstSeen, err := time.Parse("2006-01-02T15:04:05Z", host.FirstSeen)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("could not parse first seen time: %v", err)
+			return nil, nil, nil, nil, fmt.Errorf("could not parse first seen time: %v", err)
 		}
 
 		// check for empty cloud hosts that were online too short to be functional
@@ -176,9 +176,26 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 			})
 		}
 
+		last24h := time.Now().Add(-time.Hour * 24)
+
+		if isHostHidden(host) && hostLastSeen.After(last24h) {
+			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
+				WithField("id", *host.DeviceID).
+				WithField("hostname", host.Hostname).
+				Warn("found hidden host which was recently seen!")
+
+			wronglyHidden = append(wronglyHidden, Host{
+				ID:              *host.DeviceID,
+				Hostname:        host.Hostname,
+				OperatingSystem: host.OsProductName,
+				LastSeen:        hostLastSeen,
+				Tags:            host.Tags,
+				ServiceProvider: host.ServiceProvider,
+			})
+		}
+
 		// check for any sensor in RFM mode
-		checkDate := time.Now().Add(-time.Hour * 24)
-		if isRFM(host) && isCloudHost(host) && hostLastSeen.Before(checkDate) {
+		if isRFM(host) && isCloudHost(host) && hostLastSeen.Before(last24h) {
 
 			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
 				WithField("id", *host.DeviceID).
@@ -196,7 +213,7 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 		}
 
 		//  check for cloud hosts which were offline for some while
-		if isCloudHost(host) && hostLastSeen.Before(checkDate) {
+		if isCloudHost(host) && hostLastSeen.Before(last24h) {
 
 			c.logger.WithField("id", *host.DeviceID).WithField("last_seen", hostLastSeen.Format(time.DateTime)).
 				Debug("can delete offline cloud host")
@@ -212,5 +229,5 @@ func (c *CS) CleanupClients() (untagged []Host, rfm []Host, toDelete []Host, err
 		}
 	}
 
-	return untagged, rfm, toDelete, nil
+	return untagged, rfm, wronglyHidden, toDelete, nil
 }
