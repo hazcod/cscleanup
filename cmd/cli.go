@@ -45,7 +45,7 @@ func main() {
 		logger.WithError(err).Fatal("failed to load crowdstrike module")
 	}
 
-	untaggedClients, rfmClients, toDeleteHosts, err := crowdstrike.GetUntaggedClients()
+	untaggedClients, rfmClients, toDeleteHosts, err := crowdstrike.CleanupClients()
 	if err != nil {
 		logger.WithError(err).Fatal("could not fetch untagged clients")
 	}
