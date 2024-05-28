@@ -10,6 +10,7 @@ import (
 	"github.com/hazcod/cscleanup/pkg/falcon"
 	"github.com/sirupsen/logrus"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -20,6 +21,7 @@ func main() {
 	ctx := context.Background()
 
 	confFile := flag.String("config", "", "The YAML configuration file.")
+	localMode := flag.Bool("preview", false, "Should we only report and not hide nor send to Slack.")
 	flag.Parse()
 
 	conf := config.Config{}
@@ -102,6 +104,12 @@ func main() {
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
+	logger.Info(overviewText)
+
+	if *localMode {
+		os.Exit(0)
+	}
+
 	if len(deleteHostIDs) > 0 {
 		logger.WithField("total", len(deleteHostIDs)).Info("hiding crowdstrike hosts")
 
@@ -109,8 +117,6 @@ func main() {
 			logger.WithError(err).Fatal("could not delete clients")
 		}
 	}
-
-	logger.Info(overviewText)
 
 	// ---
 
