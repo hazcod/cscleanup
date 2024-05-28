@@ -256,8 +256,7 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 		}
 
 		// check for any sensor in RFM mode
-		if isRFM(host) && isCloudHost(host) && hostLastSeen.Before(last24h) {
-
+		if isRFM(host) && hostLastSeen.After(last24h) {
 			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
 				WithField("id", *host.DeviceID).
 				WithField("hostname", host.Hostname).
