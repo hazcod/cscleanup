@@ -1,7 +1,6 @@
 package falcon
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/crowdstrike/gofalcon/falcon/client/hosts"
 	"github.com/crowdstrike/gofalcon/falcon/models"
@@ -20,6 +19,84 @@ func withinFiveMinutes(t1, t2 time.Time) bool {
 		diff = -diff
 	}
 	return diff <= 5*time.Minute
+}
+
+func (c *CS) getHiddenHosts() ([]*models.DeviceapiDeviceSwagger, error) {
+	allHostDetails := make([]*models.DeviceapiDeviceSwagger, 0)
+
+	c.logger.Debug("retrieving hidden hosts")
+
+	round := 0
+	offset := int64(0)
+
+	sort := `last_seen.desc`
+
+	for {
+		resp, err := c.client.Hosts.QueryHiddenDevices(&hosts.QueryHiddenDevicesParams{
+			Filter:  nil,
+			Limit:   &csMaxQueryLimit,
+			Offset:  &offset,
+			Sort:    &sort,
+			Context: c.ctx,
+		})
+
+		if err != nil || resp == nil || !resp.IsSuccess() {
+			return nil, fmt.Errorf("response error: %v -> %+v", err, resp)
+		}
+
+		hostIDs := resp.GetPayload().Resources
+
+		c.logger.WithField("host_ids", len(hostIDs)).WithField("round", round).
+			Debug("retrieving hidden host details")
+
+		for i := 0; i < len(hostIDs); i += csDetailsFetchSize {
+			end := i + csDetailsFetchSize
+			if end > len(hostIDs) {
+				end = len(hostIDs)
+			}
+
+			c.logger.WithField("slice_start", i).WithField("slice_end", end).
+				Debug("fetching hidden host device details")
+
+			slicePart := hostIDs[i:end]
+
+			hostDetail, err := c.client.Hosts.GetDeviceDetailsV2(&hosts.GetDeviceDetailsV2Params{
+				Ids:     slicePart,
+				Context: c.ctx,
+			})
+			if err != nil || !hostDetail.IsSuccess() {
+				return nil, fmt.Errorf("could not query all hidden host details: %v", err)
+			}
+
+			allHostDetails = append(allHostDetails, hostDetail.GetPayload().Resources...)
+
+			c.logger.WithField("slice_start", i).WithField("slice_end", end).Trace("fetched hidden")
+		}
+
+		// Stop pagination if we reached the end
+		isLast, err := resp.GetPayload().Meta.Pagination.LastPage()
+		if err != nil {
+			return nil, fmt.Errorf("could not get pagination last page: %v\n", err)
+		}
+
+		if isLast {
+			if int64(len(allHostDetails)) != *resp.GetPayload().Meta.Pagination.Total {
+				return nil, fmt.Errorf("pagination total does not match pagination: fetched %d != total %d \n",
+					len(allHostDetails), *resp.GetPayload().Meta.Pagination.Total)
+			}
+
+			// stop paging, we reached the end
+			break
+		}
+
+		round += 1
+		offset += int64(len(resp.GetPayload().Resources))
+	}
+
+	c.logger.WithField("total_details", len(allHostDetails)).
+		Debug("fetched host details")
+
+	return allHostDetails, nil
 }
 
 func (c *CS) getAllHostDetails() ([]*models.DeviceapiDeviceSwagger, error) {
@@ -117,24 +194,22 @@ func isRFM(device *models.DeviceapiDeviceSwagger) bool {
 	return strings.EqualFold(device.ReducedFunctionalityMode, "yes")
 }
 
-func isHostHidden(device *models.DeviceapiDeviceSwagger) bool {
-	return device.HostHiddenStatus != "visible"
-}
-
 func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, err error) {
 
 	allHostDetails, err := c.getAllHostDetails()
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("could not query all hosts: %w", err)
 	}
+
+	hiddenHosts, err := c.getHiddenHosts()
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("could not query hidden hosts: %w", err)
+	}
+
+	last24h := time.Now().Add(-time.Hour * 24)
 
 	for _, host := range allHostDetails {
 		alreadyHasTag := hasTag(host)
-
-		if isHostHidden(host) && host.Hostname != "" {
-			b, _ := json.Marshal(host)
-			c.logger.Fatal(string(b))
-		}
 
 		hostLastSeen, err := time.Parse("2006-01-02T15:04:05Z", host.LastSeen)
 		if err != nil {
@@ -147,7 +222,7 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 		}
 
 		// check for empty cloud hosts that were online too short to be functional
-		if isCloudHost(host) && !alreadyHasTag && host.Hostname == "" {
+		if !alreadyHasTag && host.Hostname == "" && len(host.Policies) == 0 {
 			host.Hostname = *host.DeviceID
 
 			checkDate := time.Now().Add(-time.Hour * 2)
@@ -166,25 +241,11 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 
 		// check for user endpoint sensors that are not tagged
 		if !isCloudHost(host) && !alreadyHasTag {
+			if host.Hostname == "" {
+				host.Hostname = *host.DeviceID
+			}
+
 			untagged = append(untagged, Host{
-				ID:              *host.DeviceID,
-				Hostname:        host.Hostname,
-				OperatingSystem: host.OsProductName,
-				LastSeen:        hostLastSeen,
-				Tags:            host.Tags,
-				ServiceProvider: host.ServiceProvider,
-			})
-		}
-
-		last24h := time.Now().Add(-time.Hour * 24)
-
-		if isHostHidden(host) && hostLastSeen.After(last24h) {
-			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
-				WithField("id", *host.DeviceID).
-				WithField("hostname", host.Hostname).
-				Warn("found hidden host which was recently seen!")
-
-			wronglyHidden = append(wronglyHidden, Host{
 				ID:              *host.DeviceID,
 				Hostname:        host.Hostname,
 				OperatingSystem: host.OsProductName,
@@ -216,9 +277,35 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 		if isCloudHost(host) && hostLastSeen.Before(last24h) {
 
 			c.logger.WithField("id", *host.DeviceID).WithField("last_seen", hostLastSeen.Format(time.DateTime)).
+				WithField("hostname", host.Hostname).
 				Debug("can delete offline cloud host")
 
 			toDelete = append(toDelete, Host{
+				ID:              *host.DeviceID,
+				Hostname:        host.Hostname,
+				OperatingSystem: host.OsProductName,
+				LastSeen:        hostLastSeen,
+				Tags:            host.Tags,
+				ServiceProvider: host.ServiceProvider,
+			})
+		}
+	}
+
+	for _, host := range hiddenHosts {
+		hostLastSeen, err := time.Parse("2006-01-02T15:04:05Z", host.LastSeen)
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("could not parse last seen time: %v", err)
+		}
+
+		if hostLastSeen.After(last24h) {
+			c.logger.WithField("rfm", host.ReducedFunctionalityMode).
+				WithField("id", *host.DeviceID).
+				WithField("hostname", host.Hostname).
+				WithField("hidden_status", host.HostHiddenStatus).
+				WithField("tags", &host.Tags).
+				Warn("found hidden host which was recently seen!")
+
+			wronglyHidden = append(wronglyHidden, Host{
 				ID:              *host.DeviceID,
 				Hostname:        host.Hostname,
 				OperatingSystem: host.OsProductName,
