@@ -187,7 +187,7 @@ func hasTag(device *models.DeviceapiDeviceSwagger) bool {
 }
 
 func isCloudHost(device *models.DeviceapiDeviceSwagger) bool {
-	return device.ServiceProvider != ""
+	return device.ServiceProvider != "" || strings.EqualFold(device.ProductTypeDesc, "Pod")
 }
 
 func isRFM(device *models.DeviceapiDeviceSwagger) bool {
