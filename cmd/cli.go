@@ -22,6 +22,7 @@ func main() {
 
 	confFile := flag.String("config", "", "The YAML configuration file.")
 	localMode := flag.Bool("preview", false, "Should we only report and not hide nor send to Slack.")
+	logLevelCli := flag.String("log", "", "The log level to use for filtering logging.")
 	flag.Parse()
 
 	conf := config.Config{}
@@ -33,7 +34,13 @@ func main() {
 		logger.WithError(err).WithField("config", *confFile).Fatal("invalid configuration")
 	}
 
-	logrusLevel, err := logrus.ParseLevel(conf.Log.Level)
+	var logrusLevel logrus.Level
+	var err error
+	if *logLevelCli != "" {
+		logrusLevel, err = logrus.ParseLevel(*logLevelCli)
+	} else {
+		logrusLevel, err = logrus.ParseLevel(conf.Log.Level)
+	}
 	if err != nil {
 		logger.WithError(err).Error("invalid log level provided")
 		logrusLevel = logrus.InfoLevel
