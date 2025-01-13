@@ -56,7 +56,7 @@ func main() {
 
 	untaggedClients, rfmClients, wronglyHidden, toDeleteHosts, err := crowdstrike.CleanupClients()
 	if err != nil {
-		logger.WithError(err).Fatal("could not fetch untagged clients")
+		logger.WithError(err).Fatal("could not cleanup clients")
 	}
 
 	// ---

@@ -24,12 +24,11 @@ func withinFiveMinutes(t1, t2 time.Time) bool {
 func (c *CS) getHiddenHosts() ([]*models.DeviceapiDeviceSwagger, error) {
 	allHostDetails := make([]*models.DeviceapiDeviceSwagger, 0)
 
-	c.logger.Debug("retrieving hidden hosts")
-
 	round := 0
 	offset := int64(0)
-
 	sort := `last_seen.desc`
+
+	c.logger.WithField("round", round).WithField("offset", offset).Debug("retrieving hidden hosts")
 
 	for {
 		resp, err := c.client.Hosts.QueryHiddenDevices(&hosts.QueryHiddenDevicesParams{
@@ -69,8 +68,6 @@ func (c *CS) getHiddenHosts() ([]*models.DeviceapiDeviceSwagger, error) {
 			}
 
 			allHostDetails = append(allHostDetails, hostDetail.GetPayload().Resources...)
-
-			c.logger.WithField("slice_start", i).WithField("slice_end", end).Trace("fetched hidden")
 		}
 
 		// Stop pagination if we reached the end
@@ -80,11 +77,6 @@ func (c *CS) getHiddenHosts() ([]*models.DeviceapiDeviceSwagger, error) {
 		}
 
 		if isLast {
-			if int64(len(allHostDetails)) != *resp.GetPayload().Meta.Pagination.Total {
-				return nil, fmt.Errorf("pagination total does not match pagination: fetched %d != total %d \n",
-					len(allHostDetails), *resp.GetPayload().Meta.Pagination.Total)
-			}
-
 			// stop paging, we reached the end
 			break
 		}
