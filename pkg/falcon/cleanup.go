@@ -205,11 +205,6 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 	last24h := time.Now().Add(-time.Hour * 24)
 
 	for _, host := range allHostDetails {
-		// skip hosts that are not set explicitly as not hidden
-		if !strings.EqualFold(host.HostHiddenStatus, hostHiddenVisibleStatus) {
-			continue
-		}
-
 		alreadyHasTag := hasTag(host)
 
 		hostLastSeen, err := time.Parse("2006-01-02T15:04:05Z", host.LastSeen)

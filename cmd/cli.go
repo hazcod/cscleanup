@@ -121,7 +121,9 @@ func main() {
 		logger.WithField("total", len(deleteHostIDs)).Info("hiding crowdstrike hosts")
 
 		if err := crowdstrike.HideClients(deleteHostIDs); err != nil {
-			logger.WithError(err).Fatal("could not delete clients")
+			if !strings.Contains(err.Error(), "hide_host is not available for") {
+				logger.WithError(err).Fatal("could not delete clients")
+			}
 		}
 	}
 
