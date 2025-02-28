@@ -2,4 +2,4 @@
 all: run
 
 run:
-	go run ./cmd/... -config=test.yml -preview
+	go run ./cmd/... -config=test.yml

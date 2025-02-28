@@ -67,7 +67,7 @@ func main() {
 
 	overviewText += "\n> Untagged hosts:\n"
 	for _, host := range untaggedClients {
-		if host.ServiceProvider != "" {
+		if falcon.IsCloudHost(host.ServiceProvider, "", host.Hostname) {
 			continue
 		}
 
@@ -93,8 +93,8 @@ func main() {
 			logger.Warn(host.Hostname)
 		}
 
-		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
-			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
+		overviewText += fmt.Sprintf("- %s (OS %s, LS %s, TAGS %s, SP %s, MAC %s)\n",
+			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider, host.MacAddress)
 	}
 
 	overviewText += "\n> RFM/broken hosts:\n"
@@ -121,7 +121,9 @@ func main() {
 		logger.WithField("total", len(deleteHostIDs)).Info("hiding crowdstrike hosts")
 
 		if err := crowdstrike.HideClients(deleteHostIDs); err != nil {
-			if !strings.Contains(err.Error(), "hide_host is not available for") {
+			if strings.Contains(err.Error(), "hide_host is not available for") {
+				logger.WithError(err).Warn("could not hide host")
+			} else {
 				logger.WithError(err).Fatal("could not delete clients")
 			}
 		}

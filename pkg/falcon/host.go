@@ -9,4 +9,5 @@ type Host struct {
 	Tags            []string
 	ServiceProvider string
 	LastSeen        time.Time
+	MacAddress      string
 }

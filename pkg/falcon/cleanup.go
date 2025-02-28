@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-const (
-	hostHiddenVisibleStatus = "visible"
-)
-
 var (
 	csMaxQueryLimit    = int64(5000)
 	csDetailsFetchSize = 100
@@ -182,8 +178,12 @@ func hasTag(device *models.DeviceapiDeviceSwagger) bool {
 	return false
 }
 
-func isCloudHost(device *models.DeviceapiDeviceSwagger) bool {
-	return device.ServiceProvider != "" || strings.EqualFold(device.ProductTypeDesc, "Pod")
+func IsCloudHost(serviceProvider, productType, hostname string) bool {
+	return serviceProvider != "" || // Any cloud provider detected
+		strings.EqualFold(productType, "Pod") || // K8S
+		strings.HasSuffix(hostname, ".compute.internal") || // AWS
+		strings.HasPrefix(hostname, "gke-") // GCP
+
 }
 
 func isRFM(device *models.DeviceapiDeviceSwagger) bool {
@@ -218,11 +218,10 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 		}
 
 		// check for empty cloud hosts that were online too short to be functional
-		if !alreadyHasTag && host.Hostname == "" && len(host.Policies) == 0 {
+		if !alreadyHasTag && host.Hostname == "" {
 			host.Hostname = *host.DeviceID
 
-			checkDate := time.Now().Add(-time.Hour * 2)
-			if withinFiveMinutes(hostFirstSeen, hostLastSeen) && hostLastSeen.Before(checkDate) {
+			if withinFiveMinutes(hostFirstSeen, hostLastSeen) && hostLastSeen.Before(last24h) {
 				c.logger.WithField("host_id", *host.DeviceID).Warn("deleting empty temporary host")
 				toDelete = append(toDelete, Host{
 					ID:              *host.DeviceID,
@@ -231,12 +230,34 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 					LastSeen:        hostLastSeen,
 					Tags:            host.Tags,
 					ServiceProvider: host.ServiceProvider,
+					MacAddress:      host.MacAddress,
 				})
+
+				continue
 			}
 		}
 
+		//  check for cloud hosts which were offline for some while
+		if IsCloudHost(host.ServiceProvider, host.ProductTypeDesc, host.Hostname) && hostLastSeen.Before(last24h) {
+			c.logger.WithField("id", *host.DeviceID).WithField("last_seen", hostLastSeen.Format(time.DateTime)).
+				WithField("hostname", host.Hostname).
+				Debug("can delete offline cloud host")
+
+			toDelete = append(toDelete, Host{
+				ID:              *host.DeviceID,
+				Hostname:        host.Hostname,
+				OperatingSystem: host.OsProductName,
+				LastSeen:        hostLastSeen,
+				Tags:            host.Tags,
+				ServiceProvider: host.ServiceProvider,
+				MacAddress:      host.MacAddress,
+			})
+
+			continue
+		}
+
 		// check for user endpoint sensors that are not tagged
-		if !isCloudHost(host) && !alreadyHasTag {
+		if !IsCloudHost(host.ServiceProvider, host.ProductTypeDesc, host.Hostname) && !alreadyHasTag {
 			if host.Hostname == "" {
 				host.Hostname = *host.DeviceID
 			}
@@ -248,6 +269,7 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 				LastSeen:        hostLastSeen,
 				Tags:            host.Tags,
 				ServiceProvider: host.ServiceProvider,
+				MacAddress:      host.MacAddress,
 			})
 		}
 
@@ -265,23 +287,7 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 				LastSeen:        hostLastSeen,
 				Tags:            host.Tags,
 				ServiceProvider: host.ServiceProvider,
-			})
-		}
-
-		//  check for cloud hosts which were offline for some while
-		if isCloudHost(host) && hostLastSeen.Before(last24h) {
-
-			c.logger.WithField("id", *host.DeviceID).WithField("last_seen", hostLastSeen.Format(time.DateTime)).
-				WithField("hostname", host.Hostname).
-				Debug("can delete offline cloud host")
-
-			toDelete = append(toDelete, Host{
-				ID:              *host.DeviceID,
-				Hostname:        host.Hostname,
-				OperatingSystem: host.OsProductName,
-				LastSeen:        hostLastSeen,
-				Tags:            host.Tags,
-				ServiceProvider: host.ServiceProvider,
+				MacAddress:      host.MacAddress,
 			})
 		}
 	}
@@ -307,6 +313,7 @@ func (c *CS) CleanupClients() (untagged, rfm, wronglyHidden, toDelete []Host, er
 				LastSeen:        hostLastSeen,
 				Tags:            host.Tags,
 				ServiceProvider: host.ServiceProvider,
+				MacAddress:      host.MacAddress,
 			})
 		}
 	}
