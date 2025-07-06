@@ -103,12 +103,10 @@ func main() {
 			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
-	overviewText += "\n> Cloud hosts being cleaned up:\n"
+	overviewText += fmt.Sprintf("\n> Cloud hosts being cleaned up: %d\n", len(toDeleteHosts))
 	var deleteHostIDs []string
 	for _, host := range toDeleteHosts {
 		deleteHostIDs = append(deleteHostIDs, host.ID)
-		overviewText += fmt.Sprintf("- %s (%s, %s, %s, %s)\n",
-			host.Hostname, host.OperatingSystem, host.LastSeen, host.Tags, host.ServiceProvider)
 	}
 
 	logger.Info(overviewText)
